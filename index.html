@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morpho Size · Calculateur AdaptiveCurveIRM</title>
+<style>
+  :root{
+    --bg:#0e0f13; --panel:#16181f; --panel2:#1c1f28; --line:#262a35;
+    --txt:#e6e8ee; --muted:#8b90a0; --accent:#4f7cff; --accent2:#2bd4a8;
+    --warn:#ffb020; --bad:#ff5c6c; --good:#2bd4a8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 18px 80px}
+  h1{font-size:20px;margin:0 0 2px;font-weight:650}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    margin:0 0 14px;font-weight:600}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 5px}
+  .field{margin-bottom:13px}
+  input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);border-radius:9px;padding:9px 11px;font-size:14px;outline:none}
+  input[type=number]:focus{border-color:var(--accent)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .toggle{display:inline-flex;background:var(--panel2);border:1px solid var(--line);
+    border-radius:8px;padding:2px;gap:2px;margin-bottom:12px}
+  .toggle button{background:transparent;border:0;color:var(--muted);padding:5px 11px;
+    border-radius:6px;cursor:pointer;font-size:12px}
+  .toggle button.on{background:var(--accent);color:#fff}
+  details{border-top:1px solid var(--line);margin-top:6px;padding-top:10px}
+  summary{cursor:pointer;color:var(--muted);font-size:12px;user-select:none}
+  .result{font-size:26px;font-weight:700;margin:4px 0 2px}
+  .result.pos{color:var(--good)} .result.neg{color:var(--warn)} .result.bad{color:var(--bad)}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--muted)} .kv .v{font-variant-numeric:tabular-nums}
+  .note{font-size:12px;color:var(--warn);margin-top:10px}
+  .note.bad{color:var(--bad)}
+  canvas{width:100%;height:220px;display:block;background:var(--panel2);border-radius:10px;border:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500;font-size:12px}
+  td:first-child,th:first-child{text-align:left}
+  tr.cur td{color:var(--accent2);font-weight:600}
+  .mini{color:var(--muted);font-size:11px;margin-top:8px}
+  .idrow{display:flex;gap:8px}
+  .idrow input{flex:1}
+  .idrow button,.btn{background:var(--accent);border:0;color:#fff;border-radius:9px;
+    padding:9px 14px;cursor:pointer;font-size:13px}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--line);color:var(--txt)}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:9px;padding:9px;font-size:13px}
+  .statusmsg{font-size:12px;color:var(--muted);margin-top:8px;min-height:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Morpho Size · AdaptiveCurveIRM</h1>
+  <div class="sub">Combien déposer (ou retirer) pour amener le supply APY des prêteurs à une cible, sur un market Morpho Blue.</div>
+
+  <div class="grid">
+    <!-- ============ INPUTS ============ -->
+    <div class="card">
+      <h2>Market</h2>
+
+      <div class="toggle" id="mode-toggle">
+        <button data-mode="bl" class="on">B & L</button>
+        <button data-mode="su">S & u</button>
+      </div>
+
+      <div id="mode-bl">
+        <div class="row2">
+          <div class="field">
+            <label>Outstanding loans B ($)</label>
+            <input type="number" id="B" value="46735" step="any">
+          </div>
+          <div class="field">
+            <label>Liquidité dispo L ($)</label>
+            <input type="number" id="L" value="9289" step="any">
+          </div>
+        </div>
+      </div>
+
+      <div id="mode-su" style="display:none">
+        <div class="row2">
+          <div class="field">
+            <label>Dépôts totaux S ($)</label>
+            <input type="number" id="S" value="56024" step="any">
+          </div>
+          <div class="field">
+            <label>Utilisation u (%)</label>
+            <input type="number" id="uPct" value="83.42" step="any">
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Rate at target r_t (%)
+          <span class="toggle" style="margin:0 0 0 6px;vertical-align:middle" id="rt-toggle">
+            <button data-rt="apy" class="on">APY</button>
+            <button data-rt="apr">APR</button>
+          </span>
+        </label>
+        <input type="number" id="rt" value="8.54" step="any">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label>Fee du market (%)</label>
+          <input type="number" id="fee" value="0" step="any">
+        </div>
+        <div class="field">
+          <label>APY cible (%)</label>
+          <input type="number" id="target" value="13" step="any">
+        </div>
+      </div>
+
+      <details>
+        <summary>Paramètres avancés</summary>
+        <div class="row2" style="margin-top:12px">
+          <div class="field">
+            <label>Utilisation cible u_t (%)</label>
+            <input type="number" id="ut" value="90" step="any">
+          </div>
+          <div class="field">
+            <label>Steepness C</label>
+            <input type="number" id="C" value="4" step="any">
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Pré-remplir via l'API Morpho (market ID + chaîne)</summary>
+        <div style="margin-top:12px">
+          <div class="field">
+            <label>Chaîne</label>
+            <select id="chainId">
+              <option value="1">Ethereum (1)</option>
+              <option value="8453">Base (8453)</option>
+              <option value="130">Unichain (130)</option>
+              <option value="137">Polygon (137)</option>
+              <option value="42161">Arbitrum (42161)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Market ID (0x…)</label>
+            <div class="idrow">
+              <input type="text" id="marketId" placeholder="0x…" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:9px;padding:9px 11px">
+              <button id="fetchBtn" class="btn">Charger</button>
+            </div>
+          </div>
+          <div class="statusmsg" id="apiStatus"></div>
+        </div>
+      </details>
+    </div>
+
+    <!-- ============ RESULTS ============ -->
+    <div class="card">
+      <h2>Résultat</h2>
+      <div id="headline" class="result">—</div>
+      <div id="headnote" class="note" style="display:none"></div>
+      <div style="margin-top:14px">
+        <div class="kv"><span class="k">Utilisation résultante u*</span><span class="v" id="r-u">—</span></div>
+        <div class="kv"><span class="k">Borrow APY résultant</span><span class="v" id="r-bapy">—</span></div>
+        <div class="kv"><span class="k">Supply APY résultant</span><span class="v" id="r-sapy">—</span></div>
+        <div class="kv"><span class="k">Dépôts cibles S*</span><span class="v" id="r-sstar">—</span></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="kv"><span class="k">Utilisation actuelle u</span><span class="v" id="c-u">—</span></div>
+        <div class="kv"><span class="k">Borrow APY actuel</span><span class="v" id="c-bapy">—</span></div>
+        <div class="kv"><span class="k">Supply APY actuel</span><span class="v" id="c-sapy">—</span></div>
+        <div class="kv"><span class="k">Supply APY max (u=100%)</span><span class="v" id="c-max">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CHART ============ -->
+  <div class="card" style="margin-top:18px">
+    <h2>Supply APY en fonction du montant déposé</h2>
+    <canvas id="chart" width="900" height="220"></canvas>
+    <div class="mini">Axe x : montant déposé (négatif = retrait), de −L à +2S. Ligne horizontale = APY cible. Point = position actuelle.</div>
+  </div>
+
+  <!-- ============ SENSIBILITÉ ============ -->
+  <div class="card" style="margin-top:18px">
+    <h2>Sensibilité à l'APY cible</h2>
+    <table id="sensTable">
+      <thead><tr><th>APY cible</th><th>u*</th><th>Size</th><th>Supply APY</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- ============ BONUS DÉRIVE ============ -->
+  <div class="card" style="margin-top:18px">
+    <details>
+      <summary>Bonus · Projection de la dérive de r_t</summary>
+      <div class="mini" style="margin:10px 0">
+        Modèle : r_t(t) = r_t × exp(50 × err(u*) × t), t en années, en supposant u maintenu à u*.
+      </div>
+      <table id="driftTable">
+        <thead><tr><th>Horizon</th><th>r_t projeté (APY)</th><th>Size à la cible</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </details>
+  </div>
+</div>
+
+<script>
+/* ========================================================================
+   LOGIQUE PURE  (exportée pour les tests Node)
+   Taux manipulés en continu/APR en interne.
+   ======================================================================== */
+
+// APY <-> APR (taux continu)
+function apyToApr(apy){ return Math.log(1 + apy); }
+function aprToApy(apr){ return Math.exp(apr) - 1; }
+
+// err(u)
+function errOf(u, ut){
+  return u <= ut ? (u - ut) / ut : (u - ut) / (1 - ut);
+}
+
+// borrowAPR(u) — r_t en APR
+function borrowApr(u, rtApr, ut, C){
+  const err = errOf(u, ut);
+  if (err < 0) return rtApr * (1 + (1 - 1 / C) * err);
+  return rtApr * (1 + (C - 1) * err);
+}
+
+// supplyAPR(u)
+function supplyApr(u, rtApr, ut, C, fee){
+  return borrowApr(u, rtApr, ut, C) * u * (1 - fee);
+}
+
+// supply APR max atteignable (u -> 1)
+function maxSupplyApr(rtApr, ut, C, fee){
+  return supplyApr(1, rtApr, ut, C, fee);
+}
+
+// Résout le quadratique A u^2 + Bq u + Cq = 0, renvoie les racines réelles
+function quadRoots(A, Bq, Cq){
+  if (Math.abs(A) < 1e-18){
+    if (Math.abs(Bq) < 1e-18) return [];
+    return [-Cq / Bq];
+  }
+  const disc = Bq * Bq - 4 * A * Cq;
+  if (disc < 0) return [];
+  const s = Math.sqrt(disc);
+  return [(-Bq + s) / (2 * A), (-Bq - s) / (2 * A)];
+}
+
+// Inversion fermée : trouve u* tel que supplyAPR(u*) = targetApr.
+// Teste d'abord la branche u > ut, puis u <= ut. Renvoie null si inatteignable.
+function solveUClosed(targetApr, rtApr, ut, C, fee){
+  const k = rtApr * (1 - fee);
+  if (k <= 0) return null;
+  const T = targetApr / k; // supplyApr/k = borrowFactor * u
+
+  // Branche u > ut : factor = 1 + (C-1)*(u-ut)/(1-ut)
+  //   a = (C-1)/(1-ut) ; factor = (1 - a*ut) + a*u
+  //   (1 - a*ut)*u + a*u^2 = T
+  {
+    const a = (C - 1) / (1 - ut);
+    const roots = quadRoots(a, 1 - a * ut, -T);
+    for (const r of roots){
+      if (r > ut - 1e-12 && r <= 1 + 1e-9) return clamp01(r);
+    }
+  }
+  // Branche u <= ut : b = (1 - 1/C)/ut
+  {
+    const b = (1 - 1 / C) / ut;
+    const roots = quadRoots(b, 1 - b * ut, -T);
+    for (const r of roots){
+      if (r >= -1e-9 && r <= ut + 1e-12) return clamp01(r);
+    }
+  }
+  return null;
+}
+
+// Vérification/secours par bisection (supplyApr croissante en u sur [0,1])
+function solveUBisect(targetApr, rtApr, ut, C, fee){
+  let lo = 0, hi = 1;
+  const fLo = supplyApr(lo, rtApr, ut, C, fee);
+  const fHi = supplyApr(hi, rtApr, ut, C, fee);
+  if (targetApr <= fLo) return 0;
+  if (targetApr >= fHi) return null; // inatteignable
+  for (let i = 0; i < 200; i++){
+    const mid = (lo + hi) / 2;
+    if (supplyApr(mid, rtApr, ut, C, fee) < targetApr) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+/*
+  Calcul complet.
+  params: { B, S, u, rtApr, fee, targetApy, ut, C }
+  On fournit B et S (donc u = B/S). rtApr = r_t déjà en APR.
+  Renvoie un objet avec tout ce qu'il faut pour l'UI.
+*/
+function compute(p){
+  const { B, S, rtApr, fee, targetApy, ut, C } = p;
+  const u = S > 0 ? B / S : 0;
+  const targetApr = apyToApr(targetApy);
+
+  const curBorrowApy = aprToApy(borrowApr(u, rtApr, ut, C));
+  const curSupplyApy = aprToApy(supplyApr(u, rtApr, ut, C, fee));
+  const maxSupApr = maxSupplyApr(rtApr, ut, C, fee);
+  const maxSupApy = aprToApy(maxSupApr);
+
+  const reachable = targetApr < maxSupApr;
+
+  let uStar = solveUClosed(targetApr, rtApr, ut, C, fee);
+  // secours / vérification bisection
+  const uBis = solveUBisect(targetApr, rtApr, ut, C, fee);
+  if (uStar == null && uBis != null) uStar = uBis;
+  // cohérence : si les deux existent et divergent, on garde la bisection (robuste)
+  if (uStar != null && uBis != null && Math.abs(uStar - uBis) > 1e-4) uStar = uBis;
+
+  let out = {
+    u, curBorrowApy, curSupplyApy, maxSupApy, reachable,
+    uStar: null, sStar: null, size: null,
+    resBorrowApy: null, resSupplyApy: null
+  };
+
+  if (reachable && uStar != null){
+    const sStar = uStar > 0 ? B / uStar : Infinity;
+    out.uStar = uStar;
+    out.sStar = sStar;
+    out.size = sStar - S;
+    out.resBorrowApy = aprToApy(borrowApr(uStar, rtApr, ut, C));
+    out.resSupplyApy = aprToApy(supplyApr(uStar, rtApr, ut, C, fee));
+  }
+  return out;
+}
+
+// Dérive r_t(t) = r_t * exp(50 * err(u) * t)
+function driftRtApr(rtApr, u, ut, t){
+  return rtApr * Math.exp(50 * errOf(u, ut) * t);
+}
+
+/* ========================================================================
+   TESTS  (purs — exécutables sous Node)
+   ======================================================================== */
+function runTests(){
+  const results = [];
+  function approx(name, got, exp, tol){
+    const ok = Math.abs(got - exp) <= tol;
+    results.push({name, ok, got, exp, tol});
+  }
+  function assert(name, cond, got){
+    results.push({name, ok: !!cond, got, exp:'(cond)', tol:0});
+  }
+
+  const ut = 0.90, C = 4;
+
+  // --- Cas de référence ---
+  {
+    const B = 46735, L = 9289, S = B + L;
+    const rtApr = apyToApr(0.0854);
+    const r = compute({B, S, rtApr, fee:0, targetApy:0.13, ut, C});
+    approx("ref u*", r.uStar, 0.9207, 0.0005);
+    approx("ref size", r.size, -5260, 30);
+  }
+
+  // --- Cible sous l'APY actuel -> size positive ---
+  {
+    const B = 46735, L = 9289, S = B + L;
+    const rtApr = apyToApr(0.0854);
+    const cur = aprToApy(supplyApr(B/S, rtApr, ut, C, 0));
+    const r = compute({B, S, rtApr, fee:0, targetApy: cur - 0.01, ut, C});
+    assert("cible basse -> size>0", r.size > 0, r.size);
+    assert("cible basse -> u*<u", r.uStar < B/S, r.uStar);
+  }
+
+  // --- Cible inatteignable ---
+  {
+    const B = 46735, S = B + 9289;
+    const rtApr = apyToApr(0.0854);
+    const r = compute({B, S, rtApr, fee:0, targetApy: 0.99, ut, C});
+    assert("inatteignable -> reachable=false", r.reachable === false, r.reachable);
+    assert("inatteignable -> size=null", r.size === null, r.size);
+  }
+
+  // --- fee = 10% ---
+  {
+    const B = 46735, S = B + 9289;
+    const rtApr = apyToApr(0.0854);
+    const fee = 0.10;
+    const r = compute({B, S, rtApr, fee, targetApy:0.13, ut, C});
+    // vérif : supplyApr(u*) doit égaler ln(1.13) à la main
+    const check = supplyApr(r.uStar, rtApr, ut, C, fee);
+    approx("fee10 supplyApr(u*)==target", check, apyToApr(0.13), 1e-6);
+    // avec fee, il faut une utilisation plus haute qu'à fee=0 pour la même cible
+    const r0 = compute({B, S, rtApr, fee:0, targetApy:0.13, ut, C});
+    assert("fee10 u* > u*(fee0)", r.uStar > r0.uStar, r.uStar);
+  }
+
+  // --- Cohérence closed-form vs bisection sur une grille ---
+  {
+    const rtApr = apyToApr(0.0854);
+    let maxDiff = 0;
+    for (let tApy = 0.01; tApy < aprToApy(maxSupplyApr(rtApr, ut, C, 0)) - 0.001; tApy += 0.005){
+      const tApr = apyToApr(tApy);
+      const a = solveUClosed(tApr, rtApr, ut, C, 0);
+      const b = solveUBisect(tApr, rtApr, ut, C, 0);
+      if (a != null && b != null) maxDiff = Math.max(maxDiff, Math.abs(a - b));
+    }
+    assert("closed≈bisect (grille)", maxDiff < 1e-4, maxDiff);
+  }
+
+  // --- rapport ---
+  let allOk = true;
+  for (const r of results){
+    if (!r.ok) allOk = false;
+    const tag = r.ok ? "PASS" : "FAIL";
+    console.log(`[${tag}] ${r.name} — got=${fmtNum(r.got)} exp=${fmtNum(r.exp)}${r.tol?` tol=${r.tol}`:''}`);
+  }
+  console.log(allOk ? "\n✅ Tous les tests passent." : "\n❌ Des tests échouent.");
+  return allOk;
+}
+function fmtNum(x){
+  if (typeof x !== 'number') return String(x);
+  if (!isFinite(x)) return String(x);
+  return Math.abs(x) >= 1 ? x.toFixed(2) : x.toFixed(6);
+}
+
+/* ========================================================================
+   EXPORT Node
+   ======================================================================== */
+if (typeof module !== 'undefined' && module.exports){
+  module.exports = {
+    apyToApr, aprToApy, errOf, borrowApr, supplyApr, maxSupplyApr,
+    solveUClosed, solveUBisect, compute, driftRtApr, runTests
+  };
+}
+
+/* ========================================================================
+   UI  (ignoré sous Node)
+   ======================================================================== */
+if (typeof document !== 'undefined'){
+(function(){
+  const $ = id => document.getElementById(id);
+  const fmtUSD = x => (x<0?'−':'') + '$' + Math.abs(x).toLocaleString('fr-FR',{maximumFractionDigits:0});
+  const fmtPct = x => (x*100).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' %';
+
+  let inputMode = 'bl';   // 'bl' | 'su'
+  let rtMode = 'apy';     // 'apy' | 'apr'
+
+  // toggles
+  document.querySelectorAll('#mode-toggle button').forEach(b=>{
+    b.onclick = ()=>{
+      inputMode = b.dataset.mode;
+      document.querySelectorAll('#mode-toggle button').forEach(x=>x.classList.toggle('on', x===b));
+      $('mode-bl').style.display = inputMode==='bl' ? '' : 'none';
+      $('mode-su').style.display = inputMode==='su' ? '' : 'none';
+      render();
+    };
+  });
+  document.querySelectorAll('#rt-toggle button').forEach(b=>{
+    b.onclick = (e)=>{
+      e.preventDefault();
+      rtMode = b.dataset.rt;
+      document.querySelectorAll('#rt-toggle button').forEach(x=>x.classList.toggle('on', x===b));
+      render();
+    };
+  });
+
+  function readInputs(){
+    const ut = (parseFloat($('ut').value)||90)/100;
+    const C = parseFloat($('C').value)||4;
+    const fee = (parseFloat($('fee').value)||0)/100;
+    const targetApy = (parseFloat($('target').value)||0)/100;
+    const rtRaw = (parseFloat($('rt').value)||0)/100;
+    const rtApr = rtMode==='apy' ? apyToApr(rtRaw) : rtRaw;
+
+    let B, S, L;
+    if (inputMode==='bl'){
+      B = parseFloat($('B').value)||0;
+      L = parseFloat($('L').value)||0;
+      S = B + L;
+    } else {
+      S = parseFloat($('S').value)||0;
+      const u = (parseFloat($('uPct').value)||0)/100;
+      B = S * u;
+      L = S - B;
+    }
+    return {B, S, L, rtApr, fee, targetApy, ut, C};
+  }
+
+  function render(){
+    const p = readInputs();
+    const r = compute(p);
+
+    // headline
+    const hl = $('headline'), hn = $('headnote');
+    hn.style.display='none'; hn.classList.remove('bad');
+    if (!r.reachable || r.uStar==null){
+      hl.className='result bad';
+      hl.textContent = 'Cible inatteignable';
+      hn.style.display=''; hn.classList.add('bad');
+      hn.textContent = `Le supply APY max (à u = 100 %) est de ${fmtPct(r.maxSupApy)}. Choisis une cible inférieure.`;
+    } else if (r.size >= 0){
+      hl.className='result pos';
+      hl.textContent = `Tu peux déposer jusqu'à ${fmtUSD(r.size)}`;
+    } else {
+      hl.className='result neg';
+      hl.textContent = `Il faut retirer ${fmtUSD(-r.size)}`;
+      if (Math.abs(r.size) > p.L + 1e-6){
+        hn.style.display=''; hn.classList.add('bad');
+        hn.textContent = `⚠ La liquidité disponible (${fmtUSD(p.L)}) ne suffit pas pour ce retrait de ${fmtUSD(-r.size)}.`;
+      }
+    }
+
+    $('r-u').textContent    = r.uStar!=null ? fmtPct(r.uStar) : '—';
+    $('r-bapy').textContent = r.resBorrowApy!=null ? fmtPct(r.resBorrowApy) : '—';
+    $('r-sapy').textContent = r.resSupplyApy!=null ? fmtPct(r.resSupplyApy) : '—';
+    $('r-sstar').textContent= r.sStar!=null && isFinite(r.sStar) ? fmtUSD(r.sStar) : '—';
+
+    $('c-u').textContent    = fmtPct(r.u);
+    $('c-bapy').textContent = fmtPct(r.curBorrowApy);
+    $('c-sapy').textContent = fmtPct(r.curSupplyApy);
+    $('c-max').textContent  = fmtPct(r.maxSupApy);
+
+    drawChart(p, r);
+    buildSens(p, r);
+    buildDrift(p, r);
+  }
+
+  // ---- chart ----
+  function drawChart(p, r){
+    const cv = $('chart'), ctx = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    ctx.clearRect(0,0,W,H);
+    const padL=48, padR=14, padT=14, padB=24;
+    const x0=padL, x1=W-padR, y0=H-padB, y1=padT;
+
+    const B = p.B;
+    const depMin = -p.L, depMax = 2*p.S;
+    // supply apy as function of deposit d : S' = S + d, u' = B/S'
+    const N = 160;
+    const pts = [];
+    let yMax = Math.max(r.maxSupApy, p.targetApy, r.curSupplyApy)*1.1 + 1e-4;
+    let yMin = 0;
+    for (let i=0;i<=N;i++){
+      const d = depMin + (depMax-depMin)*i/N;
+      const Sp = p.S + d;
+      let apy;
+      if (Sp <= 0){ apy = r.maxSupApy; }
+      else {
+        const u = Math.min(1, B/Sp);
+        apy = aprToApy(supplyApr(u, p.rtApr, p.ut, p.C, p.fee));
+      }
+      pts.push([d, apy]);
+    }
+    const sx = d => x0 + (d-depMin)/(depMax-depMin)*(x1-x0);
+    const sy = a => y0 - (a-yMin)/(yMax-yMin)*(y0-y1);
+
+    // grid + y labels
+    ctx.strokeStyle='#262a35'; ctx.fillStyle='#8b90a0'; ctx.font='10px sans-serif';
+    ctx.lineWidth=1;
+    for (let g=0; g<=4; g++){
+      const a = yMin + (yMax-yMin)*g/4;
+      const y = sy(a);
+      ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+      ctx.fillText((a*100).toFixed(1)+'%', 6, y+3);
+    }
+    // x=0 (position nulle de dépôt) marker
+    ctx.strokeStyle='#39405220';
+    // curve
+    ctx.strokeStyle='#4f7cff'; ctx.lineWidth=2; ctx.beginPath();
+    pts.forEach((pt,i)=>{ const X=sx(pt[0]),Y=sy(pt[1]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y); });
+    ctx.stroke();
+
+    // target line
+    ctx.strokeStyle='#2bd4a8'; ctx.setLineDash([5,4]); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x0, sy(p.targetApy)); ctx.lineTo(x1, sy(p.targetApy)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#2bd4a8'; ctx.fillText('cible '+(p.targetApy*100).toFixed(1)+'%', x1-78, sy(p.targetApy)-4);
+
+    // current position point (deposit d=0)
+    const cx = sx(0), cy = sy(r.curSupplyApy);
+    ctx.fillStyle='#ffb020'; ctx.beginPath(); ctx.arc(cx,cy,4,0,7); ctx.fill();
+    ctx.strokeStyle='#ffb02066'; ctx.beginPath(); ctx.moveTo(cx,y0); ctx.lineTo(cx,y1); ctx.stroke();
+    ctx.fillStyle='#8b90a0'; ctx.fillText('actuel', cx+6, cy-6);
+
+    // x labels
+    ctx.fillStyle='#8b90a0';
+    ctx.fillText(fmtUSD(depMin), x0, H-8);
+    ctx.fillText('0', sx(0)-3, H-8);
+    ctx.fillText(fmtUSD(depMax), x1-50, H-8);
+  }
+
+  // ---- sensibilité ----
+  function buildSens(p, r){
+    const tb = $('sensTable').querySelector('tbody');
+    tb.innerHTML='';
+    for (let d=-3; d<=3; d++){
+      const tApy = p.targetApy + d/100;
+      const rr = compute({...p, targetApy: tApy});
+      const tr = document.createElement('tr');
+      if (d===0) tr.className='cur';
+      const size = (rr.reachable && rr.size!=null) ? fmtUSD(rr.size) : '—';
+      const uStar = rr.uStar!=null ? fmtPct(rr.uStar) : 'inatteignable';
+      const sapy = rr.resSupplyApy!=null ? fmtPct(rr.resSupplyApy) : '—';
+      tr.innerHTML = `<td>${(tApy*100).toFixed(1)} %</td><td>${uStar}</td><td>${size}</td><td>${sapy}</td>`;
+      tb.appendChild(tr);
+    }
+  }
+
+  // ---- bonus dérive ----
+  function buildDrift(p, r){
+    const tb = $('driftTable').querySelector('tbody');
+    tb.innerHTML='';
+    const uRef = (r.uStar!=null) ? r.uStar : r.u;
+    const horizons = [['1 jour',1/365],['3 jours',3/365],['7 jours',7/365]];
+    for (const [lab, t] of horizons){
+      const rtAprT = driftRtApr(p.rtApr, uRef, p.ut, t);
+      const rtApyT = aprToApy(rtAprT);
+      const rr = compute({...p, rtApr: rtAprT});
+      const size = (rr.reachable && rr.size!=null) ? fmtUSD(rr.size) : 'inatteignable';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${lab}</td><td>${fmtPct(rtApyT)}</td><td>${size}</td>`;
+      tb.appendChild(tr);
+    }
+  }
+
+  // ---- API Morpho (pré-remplissage) ----
+  async function fetchMarket(){
+    const st = $('apiStatus');
+    const id = $('marketId').value.trim();
+    const chainId = parseInt($('chainId').value,10);
+    if (!/^0x[0-9a-fA-F]{64}$/.test(id)){
+      st.style.color='var(--bad)'; st.textContent='Market ID invalide (attendu 0x + 64 hex).'; return;
+    }
+    st.style.color='var(--muted)'; st.textContent='Chargement…';
+    const query = `query($id:String!,$chainId:Int!){
+      marketByUniqueKey(uniqueKey:$id, chainId:$chainId){
+        uniqueKey
+        loanAsset{ symbol decimals }
+        state{
+          borrowAssetsUsd
+          supplyAssetsUsd
+          liquidityAssetsUsd
+          utilization
+          rateAtUTarget
+          fee
+        }
+      }
+    }`;
+    try{
+      const resp = await fetch('https://api.morpho.org/graphql', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({query, variables:{id, chainId}})
+      });
+      const json = await resp.json();
+      const m = json?.data?.marketByUniqueKey;
+      if (!m || !m.state) throw new Error(json?.errors?.[0]?.message || 'market introuvable');
+      const s = m.state;
+      const B = s.borrowAssetsUsd ?? 0;
+      const L = (s.liquidityAssetsUsd != null) ? s.liquidityAssetsUsd
+                : ((s.supplyAssetsUsd ?? 0) - B);
+      // rateAtUTarget = taux continu annualisé (APR, par seconde * secondsPerYear)
+      const rtApr = s.rateAtUTarget != null ? Number(s.rateAtUTarget) : null;
+      // bascule l'UI en mode B&L + rt en APR
+      inputMode='bl';
+      document.querySelectorAll('#mode-toggle button').forEach(x=>x.classList.toggle('on', x.dataset.mode==='bl'));
+      $('mode-bl').style.display=''; $('mode-su').style.display='none';
+      $('B').value = B.toFixed(2);
+      $('L').value = (L<0?0:L).toFixed(2);
+      if (rtApr != null){
+        rtMode='apr';
+        document.querySelectorAll('#rt-toggle button').forEach(x=>x.classList.toggle('on', x.dataset.rt==='apr'));
+        $('rt').value = (rtApr*100).toFixed(4);
+      }
+      $('fee').value = ((s.fee ?? 0)*100).toFixed(2);
+      st.style.color='var(--good)'; st.textContent=`Chargé : ${m.loanAsset?.symbol||''} · u=${(Number(s.utilization)*100).toFixed(2)}%`;
+      render();
+    }catch(e){
+      st.style.color='var(--bad)';
+      st.textContent='Échec de l\'API ('+e.message+'). Saisie manuelle conservée.';
+    }
+  }
+  $('fetchBtn').onclick = fetchMarket;
+
+  // recalc en direct
+  document.querySelectorAll('input[type=number]').forEach(el=> el.addEventListener('input', render));
+
+  render();
+  console.log('Morpho Size — tape runTests() dans la console (logique chargée).');
+  window.runTests = runTests;
+  window.compute = compute;
+})();
+}
+</script>
+</body>
+</html>
